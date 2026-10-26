@@ -149,7 +149,27 @@ class Engine:
     notes: list[str]
 
 
-def load_engine(repo: Path, model: str, lm: str | None, try_xl: bool) -> Engine:
+def force_float32(dit) -> None:
+    """音楽モデルを 32bit で動かす（T4 など古い GPU の 16bit では計算があふれて NaN になるため）。
+
+    ACE-Step は古い GPU では float16 に固定する。読み込んだあとで本体を float32 に変え、
+    CPU から出し入れする部品（VAE・テキストエンコーダ）も float32 で載るようにする。
+    """
+    import torch
+
+    dit.dtype = torch.float32
+    if getattr(dit, "model", None) is not None:
+        dit.model = dit.model.float()
+    if getattr(dit, "silence_latent", None) is not None:
+        dit.silence_latent = dit.silence_latent.float()
+    for name in ("vae", "text_encoder"):
+        part = getattr(dit, name, None)
+        if part is not None:
+            part.float()
+    dit._get_vae_dtype = lambda device=None: torch.float32  # VAE も古い GPU では float16 に固定されるため
+
+
+def load_engine(repo: Path, model: str, lm: str | None, try_xl: bool, precision: str = "auto") -> Engine:
     import torch
     from acestep.handler import AceStepHandler
     from acestep.llm_inference import LLMHandler
@@ -163,15 +183,19 @@ def load_engine(repo: Path, model: str, lm: str | None, try_xl: bool) -> Engine:
     if try_xl:
         model = model.replace("acestep-v15-", "acestep-v15-xl-") if "-xl-" not in model else model
     xl = "-xl-" in model
+    fp32 = precision == "fp32" or (precision == "auto" and old_gpu)
     offload = xl or vram < 20
-    quant = "int8_weight_only" if xl or vram < 20 else None
+    # 32bit にするときは 8bit 圧縮（量子化）を使わない（圧縮した重みは 32bit に戻せない）
+    quant = None if fp32 else ("int8_weight_only" if xl or vram < 20 else None)
 
     dit = AceStepHandler()
     status, ok = dit.initialize_service(project_root=str(repo), config_path=model, device="cuda",
                                         offload_to_cpu=offload, quantization=quant)
     if not ok:
         raise RuntimeError(f"音楽モデル {model} を読み込めませんでした: {status}")
-    notes.append(f"音楽モデル: {model}（CPU退避={offload}, 量子化={quant}）")
+    if fp32:
+        force_float32(dit)
+    notes.append(f"音楽モデル: {model}（CPU退避={offload}, 量子化={quant}, 精度={'32bit' if fp32 else '自動'}）")
 
     llm = LLMHandler()
     if lm:
@@ -218,6 +242,7 @@ def generate_take(engine: Engine, song: Song, seed: int, fmt: str, dest: Path) -
         return {
             "seed": seed, "style": song.style, "bpm": song.bpm, "duration": song.duration, "key": song.key,
             "language": song.language, "model": engine.model, "lm": engine.lm,
+            "precision": str(getattr(engine.dit, "dtype", "")),
             "inference_steps": params.inference_steps, "format": fmt, "sample_rate": audio.get("sample_rate"),
             "elapsed_sec": round(time.time() - started, 1),
             "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -234,6 +259,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--takes", type=int, default=3)
     ap.add_argument("--format", default="flac", choices=["flac", "wav", "mp3"])
     ap.add_argument("--try-xl", action="store_true", help="XL（4B）モデルを試す")
+    ap.add_argument("--precision", default="auto", choices=["auto", "fp32", "fp16"],
+                    help="計算の精度（auto: T4 など古い GPU では 32bit）")
     ap.add_argument("--dry-run", action="store_true", help="作る予定を表示するだけ")
     args = ap.parse_args(argv)
 
@@ -258,7 +285,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     lm = None if args.lm.lower() in ("", "none", "なし") else args.lm
-    engine = load_engine(args.repo, args.model, lm, args.try_xl)
+    engine = load_engine(args.repo, args.model, lm, args.try_xl, args.precision)
     for n in engine.notes:
         print(n)
     failed = 0
