@@ -57,6 +57,9 @@ print("設定:", MODEL_ID, "/", LM_ID, "/", TAKES, "パターン /", FORMAT)
 """, title=True),
     code("""
 #@title ② GPU の確認
+if "MODEL_ID" not in globals():
+    raise SystemExit("❌ 先に上のセルが実行されていません。メニュー「ランタイム」→「すべてのセルを実行」を押してください"
+                     "（1つずつ実行するときは、①から順番に）")
 import subprocess
 r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"], capture_output=True, text=True)
 if r.returncode != 0:
@@ -90,6 +93,9 @@ for f in sorted(glob.glob(f"{BASE}/lyrics/*.txt")):
 """, title=True),
     code("""
 #@title ④ ACE-Step を準備する（毎回 5〜10 分。モデルは初回の生成時に自動でダウンロード）
+if "BASE" not in globals():
+    raise SystemExit("❌ 先に上のセルが実行されていません。メニュー「ランタイム」→「すべてのセルを実行」を押してください"
+                     "（1つずつ実行するときは、①から順番に）")
 REPO = "/content/ACE-Step-1.5"
 if not os.path.isdir(REPO):
     subprocess.run(["git", "clone", "-q", "https://github.com/ace-step/ACE-Step-1.5.git", REPO], check=True)
@@ -104,6 +110,9 @@ print("✅ ACE-Step の準備ができました")
 """, title=True),
     code("""
 #@title ⑤ 曲を作る（作成済みのパターンは飛ばします。止まったら、もう一度「すべてのセルを実行」）
+if "REPO" not in globals():
+    raise SystemExit("❌ 先に上のセルが実行されていません。メニュー「ランタイム」→「すべてのセルを実行」を押してください"
+                     "（1つずつ実行するときは、①から順番に）")
 cmd = ["uv", "run", "python", f"{TOOL}/ace_generate.py", "--drive", BASE, "--repo", REPO,
        "--model", MODEL_ID, "--lm", LM_ID, "--takes", str(TAKES), "--format", FORMAT]
 if MODEL_ID.startswith("acestep-v15-xl"):
@@ -121,8 +130,12 @@ print("（詳しい記録: ドライブの", f"{DRIVE_FOLDER}/output/_last_run.l
 """, title=True),
     code("""
 #@title ⑥ できた曲を聴く
+if "BASE" not in globals():
+    raise SystemExit("❌ 先に上のセルが実行されていません。メニュー「ランタイム」→「すべてのセルを実行」を押してください"
+                     "（1つずつ実行するときは、①から順番に）")
 import json
 from IPython.display import Audio, display, Markdown
+found = False
 for d in sorted(glob.glob(f"{BASE}/output/*/")):
     takes = sorted(glob.glob(f"{d}take*.{FORMAT}"))
     if not takes:
@@ -133,6 +146,9 @@ for d in sorted(glob.glob(f"{BASE}/output/*/")):
         info = json.load(open(info_path, encoding="utf-8")) if os.path.exists(info_path) else {}
         print(os.path.basename(t), "シード", info.get("seed"), "/", info.get("model"), "/", info.get("elapsed_sec"), "秒")
         display(Audio(t))
+        found = True
+if not found:
+    print("まだ曲がありません。⑤ の表示に「失敗」が出ていないか確認してください")
 """),
     md("""
 ## 作った曲を「夜、ひとりで聴く歌」のツールに入れるには
