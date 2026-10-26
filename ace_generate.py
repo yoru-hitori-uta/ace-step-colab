@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import re
 import shutil
@@ -34,6 +35,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+# Colab のノートブックから起動すると、グラフ表示用の設定（MPLBACKEND=module://matplotlib_inline...）が
+# 引き継がれ、ACE-Step の環境では読み込めずに止まる。画面に描かないので、ファイル出力用に固定する
+os.environ["MPLBACKEND"] = "Agg"
 
 HEADER_KEYS = {
     "タイトル": "title", "曲名": "title", "title": "title",

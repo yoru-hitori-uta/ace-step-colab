@@ -127,7 +127,10 @@ cmd = ["uv", "run", "python", f"{TOOL}/ace_generate.py", "--drive", BASE, "--rep
        "--model", MODEL_ID, "--lm", LM_ID, "--takes", str(TAKES), "--format", FORMAT]
 if MODEL_ID.startswith("acestep-v15-xl"):
     cmd.append("--try-xl")
-proc = subprocess.Popen(cmd, cwd=REPO, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+# Colab 用の設定（グラフ表示など）を ACE-Step 側に持ち込まない
+env = {k: v for k, v in os.environ.items() if k != "MPLBACKEND"}
+env["MPLBACKEND"] = "Agg"
+proc = subprocess.Popen(cmd, cwd=REPO, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 log = []
 for line in proc.stdout:
     log.append(line)
@@ -136,6 +139,9 @@ for line in proc.stdout:
         print(line, end="")
 proc.wait()
 open(f"{BASE}/output/_last_run.log", "w", encoding="utf-8").writelines(log)
+if proc.returncode not in (0, 2):  # 0=完了 2=一部失敗（次回作り直す）。それ以外は途中で止まった
+    print("".join(log[-15:]))
+    raise SystemExit("❌ 途中で止まりました。上の表示（または ドライブの _last_run.log）を Claude に伝えてください")
 print("（詳しい記録: ドライブの", f"{DRIVE_FOLDER}/output/_last_run.log）")
 """, title=True),
     code("""
