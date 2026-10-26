@@ -72,7 +72,21 @@ print("✅ GPU:", r.stdout.strip())
 #@title ③ Google ドライブにつなぐ（「許可」を押してください）
 import os, shutil, glob
 from google.colab import drive
-drive.mount("/content/drive")
+try:
+    drive.mount("/content/drive", force_remount=True)
+except Exception as e:  # 許可の画面で止まった・許可が足りないとき
+    raise SystemExit(
+        "❌ Google ドライブにつなげませんでした（" + str(e) + "）
+"
+        "次のことを確かめて、このセル（③）の左の ▶ を押してやり直してください:
+"
+        " ・許可の画面では、右上で Colab にログインしているのと同じアカウントを選ぶ
+"
+        " ・「すべて選択」にチェックを入れてから「続行」を押す（チェックが外れていると失敗します）
+"
+        " ・画面が出ないときは、ブラウザのポップアップのブロックを解除する
+"
+        "つながったら、メニュー「ランタイム」→「すべてのセルを実行」をもう一度押してください")
 BASE = f"/content/drive/MyDrive/{DRIVE_FOLDER}"
 os.makedirs(f"{BASE}/lyrics", exist_ok=True)
 os.makedirs(f"{BASE}/output", exist_ok=True)
