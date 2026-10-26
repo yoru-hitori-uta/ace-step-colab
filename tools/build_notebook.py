@@ -89,8 +89,13 @@ os.makedirs(f"{BASE}/output", exist_ok=True)
 
 # このノートブックの部品（生成スクリプトと見本の歌詞）を取ってくる
 TOOL = "/content/ace-step-colab"
-if not os.path.isdir(TOOL):
+# 毎回いちばん新しい版にする（同じセッションで続けて実行しても、修正が反映されるように）
+if os.path.isdir(TOOL):
+    subprocess.run(["git", "-C", TOOL, "pull", "-q", "--ff-only"], check=False)
+else:
     subprocess.run(["git", "clone", "-q", "https://github.com/yoru-hitori-uta/ace-step-colab.git", TOOL], check=True)
+print("部品の版:", subprocess.run(["git", "-C", TOOL, "log", "-1", "--format=%h %cd", "--date=short"],
+                               capture_output=True, text=True).stdout.strip())
 
 # 歌詞フォルダが空なら、動作確認用の見本を1曲入れる
 if not glob.glob(f"{BASE}/lyrics/*.txt"):
