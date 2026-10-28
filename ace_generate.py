@@ -250,6 +250,23 @@ def generate_take(engine: Engine, song: Song, seed: int, fmt: str, dest: Path) -
         }
 
 
+DONE_DIR = "済み"  # 作り終わった歌詞ファイルの移動先（次回からは読まない）
+LAST_RUN = "_last_run_songs.json"  # ⑥ で聴く曲（今回の実行で作った曲）の一覧
+
+
+def retire_lyrics(path: Path) -> Path:
+    """作り終わった歌詞ファイルを lyrics/済み/ へ移す（同じ名前があれば番号を付ける）。"""
+    done = path.parent / DONE_DIR
+    done.mkdir(exist_ok=True)
+    dest = done / path.name
+    n = 2
+    while dest.exists():
+        dest = done / f"{path.stem}_{n}{path.suffix}"
+        n += 1
+    path.replace(dest)
+    return dest
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--drive", type=Path, required=True, help="ドライブの ace-step フォルダ")
@@ -278,11 +295,16 @@ def main(argv: list[str] | None = None) -> int:
             continue
         out_dir = out_root / safe_name(song.title)
         todo = missing_takes(out_dir, args.takes, args.format)
-        print(f"■ {song.title}: " + (f"テイク {todo} を作ります" if todo else "作成済み（飛ばします）"))
+        print(f"■ {song.title}: " + (f"テイク {todo} を作ります" if todo else "作成済み（歌詞を「済み」へ移します）"))
         if todo:
             jobs.append((song, out_dir, todo))
+        elif not args.dry_run:
+            retire_lyrics(f)
     if args.dry_run or not jobs:
         return 0
+    (out_root / LAST_RUN).parent.mkdir(parents=True, exist_ok=True)
+    (out_root / LAST_RUN).write_text(json.dumps([out_dir.name for _, out_dir, _ in jobs], ensure_ascii=False) + "\n",
+                                     encoding="utf-8")
 
     lm = None if args.lm.lower() in ("", "none", "なし") else args.lm
     engine = load_engine(args.repo, args.model, lm, args.try_xl, args.precision)
@@ -310,6 +332,8 @@ def main(argv: list[str] | None = None) -> int:
                     pass
             info_path.write_text(json.dumps(info, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
             print(f"  → 保存しました: {audio_path}（{info.get('elapsed_sec')} 秒）", flush=True)
+        if not missing_takes(out_dir, args.takes, args.format):
+            print(f"  歌詞を「{DONE_DIR}」フォルダへ移しました（次回は作りません）: {retire_lyrics(song.path).name}")
     print("完了" if not failed else f"完了（失敗 {failed} 本。もう一度実行すると作り直します）")
     return 0 if not failed else 2
 

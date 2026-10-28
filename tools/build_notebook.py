@@ -97,8 +97,8 @@ else:
 print("部品の版:", subprocess.run(["git", "-C", TOOL, "log", "-1", "--format=%h %cd", "--date=short"],
                                capture_output=True, text=True).stdout.strip())
 
-# 歌詞フォルダが空なら、動作確認用の見本を1曲入れる
-if not glob.glob(f"{BASE}/lyrics/*.txt"):
+# 歌詞フォルダが空なら、動作確認用の見本を1曲入れる（一度も使っていないときだけ）
+if not glob.glob(f"{BASE}/lyrics/*.txt") and not os.path.isdir(f"{BASE}/lyrics/済み"):
     for f in glob.glob(f"{TOOL}/examples/lyrics/*.txt"):
         shutil.copy(f, f"{BASE}/lyrics/")
     print("📝 歌詞フォルダが空だったので、見本の歌詞を入れました")
@@ -157,7 +157,13 @@ if "BASE" not in globals():
 import json
 from IPython.display import Audio, display, Markdown
 found = False
-for d in sorted(glob.glob(f"{BASE}/output/*/")):
+SHOW_ALL = False  #@param {type:"boolean"}
+dirs = sorted(glob.glob(f"{BASE}/output/*/"))
+last = f"{BASE}/output/_last_run_songs.json"
+if not SHOW_ALL and os.path.exists(last):  # ふだんは今回作った曲だけ（全部聴くときは SHOW_ALL にチェック）
+    names = json.load(open(last, encoding="utf-8"))
+    dirs = [d for d in dirs if os.path.basename(d.rstrip('/')) in names] or dirs
+for d in dirs:
     takes = sorted(glob.glob(f"{d}take*.{FORMAT}"))
     if not takes:
         continue

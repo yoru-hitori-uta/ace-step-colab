@@ -66,9 +66,26 @@ def test_resume_skips_finished_takes(tmp_path, monkeypatch, capsys):
     assert (out / "lyrics.txt").read_text(encoding="utf-8") == "[Verse]\nあいうえお\n"
     assert json.loads((out / "song.json").read_text(encoding="utf-8"))["title"] == "歌"
 
+    # 3本そろったので歌詞は「済み」へ移り、今回作った曲として記録される
+    assert not (drive / "lyrics" / "歌.txt").exists() and (drive / "lyrics" / "済み" / "歌.txt").exists()
+    assert json.loads((drive / "output" / ag.LAST_RUN).read_text(encoding="utf-8")) == ["歌"]
+
+    # 歌詞を戻しても、作成済みなら作らずにまた「済み」へ（同じ名前は番号付き）
+    write(drive / "lyrics" / "歌.txt", "タイトル: 歌\n---\n[Verse]\nあいうえお\n")
     made.clear()
     assert ag.main(["--drive", str(drive), "--repo", str(tmp_path), "--takes", "3"]) == 0
     assert made == [] and "作成済み" in capsys.readouterr().out
+    assert (drive / "lyrics" / "済み" / "歌_2.txt").exists() and not (drive / "lyrics" / "歌.txt").exists()
+
+
+def test_dry_run_moves_nothing(tmp_path):
+    drive = tmp_path / "ace-step"
+    write(drive / "lyrics" / "歌.txt", "タイトル: 歌\n---\nあ\n")
+    for n in (1, 2):
+        write(drive / "output" / "歌" / f"take{n}.flac", "x")
+        write(drive / "output" / "歌" / f"take{n}.json", "{}")
+    assert ag.main(["--drive", str(drive), "--repo", str(tmp_path), "--takes", "2", "--dry-run"]) == 0
+    assert (drive / "lyrics" / "歌.txt").exists()
 
 
 def test_failure_keeps_going_and_is_retried(tmp_path, monkeypatch):
@@ -88,3 +105,4 @@ def test_failure_keeps_going_and_is_retried(tmp_path, monkeypatch):
     assert ag.main(["--drive", str(drive), "--repo", str(tmp_path), "--takes", "2"]) == 2
     assert calls == [7, 8]
     assert ag.missing_takes(drive / "output" / "歌", 2, "flac") == [1]
+    assert (drive / "lyrics" / "歌.txt").exists()  # 未完成なので歌詞は残す
