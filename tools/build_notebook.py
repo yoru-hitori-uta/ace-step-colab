@@ -60,9 +60,11 @@ print("設定:", MODEL_ID, "/", LM_ID, "/", TAKES, "パターン /", FORMAT)
 if "MODEL_ID" not in globals():
     raise SystemExit("❌ 先に上のセルが実行されていません。メニュー「ランタイム」→「すべてのセルを実行」を押してください"
                      "（1つずつ実行するときは、①から順番に）")
-import subprocess
-r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"], capture_output=True, text=True)
-if r.returncode != 0:
+import shutil, subprocess
+# GPU なしのランタイムには nvidia-smi 自体がない（以前は英語の FileNotFoundError で止まっていた）
+r = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+                   capture_output=True, text=True) if shutil.which("nvidia-smi") else None
+if r is None or r.returncode != 0:
     raise SystemExit("❌ GPU が使えません。上のメニュー「ランタイム」→「ランタイムのタイプを変更」で「T4 GPU」を選び、"
                      "「保存」してから、もう一度「すべてのセルを実行」してください。"
                      "（無料枠の上限に達したときも GPU が使えなくなります。時間をおいて試してください）")
